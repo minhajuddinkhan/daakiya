@@ -39,7 +39,7 @@ func (s *kvStore) Get(offset uint64) ([]byte, error) {
 	defer s.Mutex.Unlock()
 	v, ok := s.messages[offset]
 	if !ok {
-		return nil, fmt.Errorf("cannot find error at offset %d", offset)
+		return nil, &OffsetNotFound{message: fmt.Sprintf("cannot find error at offset %d", offset)}
 	}
 	return v, nil
 }

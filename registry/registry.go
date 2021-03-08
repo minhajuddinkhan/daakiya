@@ -55,9 +55,15 @@ func (r *registry) FromOffset(offset uint) chan []byte {
 		for {
 			val, err := r.store.Get(uint64(offset))
 			if err != nil {
-				<-r.nextMessageAvailable()
-				// close(ch)
-				// return
+				switch err.(type) {
+				case *storage.OffsetNotFound:
+					<-r.nextMessageAvailable()
+
+				default:
+					close(ch)
+					return
+
+				}
 			}
 			ch <- val
 			offset++
