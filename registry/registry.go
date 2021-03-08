@@ -10,7 +10,6 @@ import (
 //Registry Registry
 type Registry interface {
 	Append(message []byte)
-	NextMessageAvailable() chan struct{}
 	FromOffset(offset uint) chan []byte
 }
 type registry struct {
@@ -33,7 +32,7 @@ func (r *registry) Append(message []byte) {
 	r.cond.L.Unlock()
 }
 
-func (r *registry) NextMessageAvailable() chan struct{} {
+func (r *registry) nextMessageAvailable() chan struct{} {
 
 	c := make(chan struct{})
 	r.cond.L.Lock()
@@ -44,7 +43,6 @@ func (r *registry) NextMessageAvailable() chan struct{} {
 
 		channel <- struct{}{}
 	}(c)
-	fmt.Println("NEXT MESSAGE AVAILABLE EXIT")
 	r.cond.L.Unlock()
 	return c
 }
@@ -57,8 +55,9 @@ func (r *registry) FromOffset(offset uint) chan []byte {
 		for {
 			val, err := r.store.Get(uint64(offset))
 			if err != nil {
-				close(ch)
-				return
+				<-r.nextMessageAvailable()
+				// close(ch)
+				// return
 			}
 			ch <- val
 			offset++

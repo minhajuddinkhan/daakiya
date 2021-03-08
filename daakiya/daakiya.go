@@ -74,12 +74,12 @@ func (d *Daakia) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 				}
 			}
 
-			select {
-			case <-r.Context().Done():
-				return
-			case <-d.registries[clientID].NextMessageAvailable():
-				continue
-			}
+			// select {
+			// case <-r.Context().Done():
+			// 	return
+			// case <-d.registries[clientID].NextMessageAvailable():
+			// 	continue
+			// }
 		}
 
 	}
