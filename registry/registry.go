@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -10,7 +11,7 @@ import (
 //Registry Registry
 type Registry interface {
 	Append(message []byte)
-	FromOffset(offset uint) chan []byte
+	FromOffset(context context.Context, offset uint) (chan []byte, context.CancelFunc)
 }
 type registry struct {
 	store storage.Storage
@@ -37,7 +38,6 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 	c := make(chan struct{})
 	r.cond.L.Lock()
 
-	fmt.Println("wait state....")
 	r.cond.Wait()
 	go func(channel chan struct{}) {
 
@@ -48,27 +48,38 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 }
 
 //FromOffset returns a channel that provides all available messages
-func (r *registry) FromOffset(offset uint) chan []byte {
+func (r *registry) FromOffset(ctx context.Context, offset uint) (chan []byte, context.CancelFunc) {
 
+	wCancel, cancelFunc := context.WithCancel(ctx)
 	ch := make(chan []byte)
 	go func() {
 		for {
-			val, err := r.store.Get(uint64(offset))
-			if err != nil {
-				switch err.(type) {
-				case *storage.OffsetNotFound:
-					<-r.nextMessageAvailable()
 
-				default:
-					close(ch)
-					return
+			select {
+			case <-wCancel.Done():
+				close(ch)
+				fmt.Println("closing chanell..")
+				return
+			default:
+				val, err := r.store.Get(uint64(offset))
+				if err != nil {
+					switch err.(type) {
+					case *storage.OffsetNotFound:
+						<-r.nextMessageAvailable()
+						continue
 
+					default:
+						close(ch)
+						fmt.Println("closing chanell in defaults ection..")
+						return
+					}
 				}
+				ch <- val
+				offset++
 			}
-			ch <- val
-			offset++
+
 		}
 	}()
-	return ch
+	return ch, cancelFunc
 
 }

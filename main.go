@@ -24,14 +24,15 @@ func main() {
 		i := 0
 		j := 0
 		for {
-			for i < 1000 {
+			for i < 10 {
 
 				registries["12345"].Append([]byte(fmt.Sprintf("%d", j)))
 				// registries["12345"].Append([]byte(fmt.Sprintf("%d", i)))
 
-				fmt.Println("appending...")
+				fmt.Println("appending...", j)
 				i++
 				j++
+				// time.Sleep(time.Second)
 
 			}
 			time.Sleep(2 * time.Second)

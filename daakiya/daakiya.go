@@ -1,6 +1,7 @@
 package daakiya
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -47,39 +48,21 @@ func (d *Daakia) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	rw.Header().Set("Connection", "keep-alive")
 	rw.Header().Set("Access-Control-Allow-Origin", "*")
 
-	defer func() { fmt.Println("DONE") }()
 	for {
-		select {
+		ctx := context.Background()
+		queue, cancelFunc := d.registries[clientID].FromOffset(ctx, uint(offset))
+		defer cancelFunc()
 
+		select {
 		case <-r.Context().Done():
 			fmt.Println("client disconnected")
 			return
 
-		default:
-			fmt.Println("HERE?")
+		case message := <-queue:
+			fmt.Fprintf(rw, "data: %v\n", string(message))
+			flusher.Flush()
+			offset++
 
-			// default:
-
-			for message := range d.registries[clientID].FromOffset(uint(offset)) {
-				fmt.Println("writing message...")
-				fmt.Fprintf(rw, "data: %v\n", string(message))
-				flusher.Flush()
-				offset++
-				select {
-				case <-r.Context().Done():
-					fmt.Println("client disconnected...")
-					return
-				default:
-					continue
-				}
-			}
-
-			// select {
-			// case <-r.Context().Done():
-			// 	return
-			// case <-d.registries[clientID].NextMessageAvailable():
-			// 	continue
-			// }
 		}
 
 	}
