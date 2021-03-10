@@ -24,12 +24,12 @@ func main() {
 		i := 0
 		j := 0
 		for {
-			for i < 10 {
+			for i < 2 {
 
 				registries["12345"].Append([]byte(fmt.Sprintf("%d", j)))
 				// registries["12345"].Append([]byte(fmt.Sprintf("%d", i)))
 
-				fmt.Println("appending...", j)
+				// fmt.Println("appending...", j)
 				i++
 				j++
 				// time.Sleep(time.Second)
@@ -40,5 +40,6 @@ func main() {
 		}
 	}()
 
-	log.Fatal(http.ListenAndServe(":3000", &d))
+	http.HandleFunc("/recieve", d.EstablishWebsocketConnection())
+	log.Fatal(http.ListenAndServe(":3000", nil))
 }

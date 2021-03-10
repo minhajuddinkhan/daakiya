@@ -57,8 +57,8 @@ func (r *registry) FromOffset(ctx context.Context, offset uint) (chan []byte, co
 
 			select {
 			case <-wCancel.Done():
+				fmt.Println("closing channell..")
 				close(ch)
-				fmt.Println("closing chanell..")
 				return
 			default:
 				val, err := r.store.Get(uint64(offset))
