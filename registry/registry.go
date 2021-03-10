@@ -63,6 +63,7 @@ func (r *registry) FromOffset(ctx context.Context, offset uint) (chan []byte, co
 			default:
 				val, err := r.store.Get(uint64(offset))
 				if err != nil {
+					fmt.Println("ERROR?", err)
 					switch err.(type) {
 					case *storage.OffsetNotFound:
 						<-r.nextMessageAvailable()

@@ -29,13 +29,3 @@ func TestStorage_ShouldReturnCorrectValueAfterFlush(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("bye"), v)
 }
-
-func TestStorage_MemSizeShouldBeZeroAfterFlush(t *testing.T) {
-
-	store := storage.NewKVStorage()
-
-	store.Append([]byte("Hey"))
-	store.Flush()
-	assert.Equal(t, uint16(0), store.MemSize())
-
-}

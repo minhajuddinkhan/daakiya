@@ -15,13 +15,15 @@ import (
 //Daakia Daakia
 type Daakia struct {
 	// store storage.Storage
-	registries map[string]registry.Registry
+	registries    map[string]registry.Registry
+	Configuration Configuration
 }
 
 //NewDaakiya creates a new dakia instance
 func NewDaakiya(registry map[string]registry.Registry) Daakia {
 	return Daakia{
-		registries: registry,
+		registries:    registry,
+		Configuration: NewConfig(),
 	}
 }
 
@@ -70,12 +72,13 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 			case <-r.Context().Done():
 				fmt.Println("client disconnected")
 				return
-			case <-time.NewTicker(2 * time.Second).C:
+			case <-time.NewTicker(d.Configuration.ClientPingTime).C:
 				if err := c.WriteMessage(websocket.PingMessage, nil); err != nil {
 					cancelFunc()
 					return
 				}
 			case message := <-queue:
+
 				if err := c.WriteMessage(1, message); err != nil {
 					continue
 				}

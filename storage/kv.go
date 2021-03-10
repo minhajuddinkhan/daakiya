@@ -19,12 +19,13 @@ func NewKVStorage() Storage {
 	}
 }
 
-func (s *kvStore) Append(message []byte) {
+func (s *kvStore) Append(message []byte) error {
 
 	s.Mutex.Lock()
 	defer s.Mutex.Unlock()
 	s.messages[s.offset] = message
 	s.offset++
+	return nil
 }
 
 func (s *kvStore) Flush() {
