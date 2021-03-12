@@ -7,8 +7,7 @@
 
 Daakiya is a message broker that ensures 100% message delivery. It is inspired by Uber's ramen protocol built differntly on top of Go and cassandra.
 
-![alt text](https://filebin.net/ahqhthw95we9bnex/ramen.png?t=4cvahb3w
-)
+![alt text](https://filebin.net/ahqhthw95we9bnex/ramen.png?t=75zdd8lj)
 
 
 
