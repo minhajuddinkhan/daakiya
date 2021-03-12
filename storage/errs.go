@@ -17,3 +17,12 @@ type OffsetUnavailable struct {
 func (e *OffsetUnavailable) Error() string {
 	return e.Message
 }
+
+type ErrHashNotFound struct {
+	Message string
+}
+
+func (e *ErrHashNotFound) Error() string {
+	return e.Message
+
+}

@@ -10,8 +10,8 @@ import (
 
 //Registry Registry
 type Registry interface {
-	Append(message []byte)
-	FromOffset(context context.Context, offset int) (chan []byte, error)
+	Append(hash string, message []byte)
+	FromOffset(context context.Context, hash string, offset int) (chan []byte, error)
 }
 type registry struct {
 	store storage.Storage
@@ -26,10 +26,10 @@ func NewRegistry(store storage.Storage) Registry {
 }
 
 //Append Append
-func (r *registry) Append(message []byte) {
+func (r *registry) Append(hash string, message []byte) {
 	r.cond.L.Lock()
 	r.cond.Broadcast()
-	r.store.Append(message)
+	r.store.Append(hash, message)
 	r.cond.L.Unlock()
 }
 
@@ -47,10 +47,10 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 }
 
 //FromOffset returns a channel that provides all available messages
-func (r *registry) FromOffset(ctx context.Context, offset int) (chan []byte, error) {
+func (r *registry) FromOffset(ctx context.Context, hash string, offset int) (chan []byte, error) {
 
 	retryIfLastOffsetExpiresBetweenFetchTime := false
-	oldestOffset, err := r.store.GetLastAvailableOffset()
+	oldestOffset, err := r.store.GetLastAvailableOffset(hash)
 	if err != nil {
 		return nil, &ErrOffsetUnavailable{Message: err.Error()}
 	}
@@ -84,7 +84,7 @@ func (r *registry) FromOffset(ctx context.Context, offset int) (chan []byte, err
 				return
 			default:
 
-				val, err := r.store.Get(uint64(offset))
+				val, err := r.store.Get(hash, uint64(offset))
 				if err != nil {
 					switch err.(type) {
 					case *storage.OffsetUnavailable:

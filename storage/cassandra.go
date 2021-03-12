@@ -11,17 +11,17 @@ type cassandra struct {
 	clusterConfig *gocql.ClusterConfig
 	sess          *gocql.Session
 	sync.Mutex
-	offset   uint
-	clientID string
-	ttl      uint16
+	offset       uint
+	ttl          uint16
+	synchronized bool
 }
 
 //NewCassandraStorage creates a new cassandra storage
-func NewCassandraStorage(clientID string, clusterConfig *gocql.ClusterConfig) (Storage, error) {
+func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
+
 	c := &cassandra{
-		clientID:      clientID,
 		clusterConfig: clusterConfig,
-		ttl:           2,
+		ttl:           30,
 		Mutex:         sync.Mutex{},
 		//TODO:: take instead of arguments.
 	}
@@ -32,12 +32,11 @@ func NewCassandraStorage(clientID string, clusterConfig *gocql.ClusterConfig) (S
 	}
 	c.sess = sess
 
-	c.offset, err = c.lastAvailableOffset()
 	return c, err
 
 }
 
-func (c *cassandra) lastAvailableOffset() (uint, error) {
+func (c *cassandra) lastAvailableOffset(hash string) (uint, error) {
 
 	sess, err := c.session()
 	if err != nil {
@@ -45,7 +44,7 @@ func (c *cassandra) lastAvailableOffset() (uint, error) {
 	}
 	var lastAvailableOffset uint64
 	err = sess.
-		Query(`SELECT MAX(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, c.clientID).
+		Query(`SELECT MIN(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, hash).
 		Scan(&lastAvailableOffset)
 	if err != nil {
 		return 0, err
@@ -66,10 +65,30 @@ func (c *cassandra) session() (*gocql.Session, error) {
 	return c.sess, nil
 }
 
-func (c *cassandra) Append(message []byte) error {
+func (c *cassandra) synchronizeOffset(hash string) error {
+
+	c.Lock()
+	if !c.synchronized {
+		o, err := c.lastAvailableOffset(hash)
+		if err != nil {
+			c.Unlock()
+			return err
+		}
+		c.offset = o
+		c.synchronized = true
+	}
+	c.Unlock()
+	return nil
+
+}
+func (c *cassandra) Append(hash string, message []byte) error {
 
 	session, err := c.session()
 	if err != nil {
+		return err
+	}
+
+	if err := c.synchronizeOffset(hash); err != nil {
 		return err
 	}
 
@@ -78,7 +97,7 @@ func (c *cassandra) Append(message []byte) error {
 	 USING TTL ?`
 
 	args := []interface{}{
-		c.clientID,
+		hash,
 		c.offset,
 		message,
 		c.ttl,
@@ -92,10 +111,10 @@ func (c *cassandra) Append(message []byte) error {
 	c.offset++
 	return nil
 }
-func (c *cassandra) Flush() {
+func (c *cassandra) Flush(hash string) {
 	//do nothing for now...
 }
-func (c *cassandra) Get(offset uint64) ([]byte, error) {
+func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
 
 	c.Lock()
 	if offset > uint64(c.offset) {
@@ -110,7 +129,7 @@ func (c *cassandra) Get(offset uint64) ([]byte, error) {
 	}
 
 	q := `SELECT data FROM messages WHERE client_id = ? AND offset = ?`
-	args := []interface{}{c.clientID, offset}
+	args := []interface{}{hash, offset}
 
 	var bytes []byte
 	if err := session.Query(q, args...).Scan(&bytes); err != nil {
@@ -122,6 +141,6 @@ func (c *cassandra) Get(offset uint64) ([]byte, error) {
 	return bytes, nil
 }
 
-func (c *cassandra) GetLastAvailableOffset() (uint, error) {
-	return c.lastAvailableOffset()
+func (c *cassandra) GetLastAvailableOffset(hash string) (uint, error) {
+	return c.lastAvailableOffset(hash)
 }

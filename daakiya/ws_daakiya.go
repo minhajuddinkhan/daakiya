@@ -15,14 +15,14 @@ import (
 //Daakia Daakia
 type Daakia struct {
 	// store storage.Storage
-	registries    map[string]registry.Registry
+	registry      registry.Registry
 	Configuration Configuration
 }
 
 //NewDaakiya creates a new dakia instance
-func NewDaakiya(registry map[string]registry.Registry) Daakia {
+func NewDaakiya(registry registry.Registry) Daakia {
 	return Daakia{
-		registries:    registry,
+		registry:      registry,
 		Configuration: NewConfig(),
 	}
 }
@@ -58,7 +58,7 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		queue, err := d.registries[clientID].FromOffset(ctx, offset)
+		queue, err := d.registry.FromOffset(ctx, clientID, offset)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return

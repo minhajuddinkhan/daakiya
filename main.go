@@ -19,16 +19,14 @@ func main() {
 	clusterConfig := gocql.NewCluster("localhost:9042")
 	clusterConfig.Keyspace = "test_keyspace"
 
-	cassandraStorage12345, err := storage.NewCassandraStorage("12345", clusterConfig)
+	storage, err := storage.NewCassandraStorage(clusterConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	registries := map[string]registry.Registry{
-		"12345": registry.NewRegistry(cassandraStorage12345),
-	}
+	registry := registry.NewRegistry(storage)
 
-	d := daakiya.NewDaakiya(registries)
+	d := daakiya.NewDaakiya(registry)
 
 	go func() {
 		i := 0
@@ -36,7 +34,7 @@ func main() {
 		for {
 			for i < 5 {
 
-				registries["12345"].Append([]byte(fmt.Sprintf("%d", j)))
+				registry.Append("12345", []byte(fmt.Sprintf("%d", j)))
 				// registries["12345"].Append([]byte(fmt.Sprintf("%d", i)))
 
 				// fmt.Println("appending...", j)
@@ -45,7 +43,7 @@ func main() {
 				// time.Sleep(time.Second)
 
 			}
-			time.Sleep(1 * time.Second)
+			time.Sleep(200 * time.Millisecond)
 			i = 0
 		}
 	}()

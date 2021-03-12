@@ -10,8 +10,8 @@ import (
 func TestStorage_ShouldAppendAndReturnCorrectValueOnOffset(t *testing.T) {
 
 	store := storage.NewKVStorage()
-	store.Append([]byte("hello"))
-	v, err := store.Get(0)
+	store.Append("12345", []byte("hello"))
+	v, err := store.Get("12345", 0)
 	assert.Nil(t, err)
 	assert.Equal(t, "hello", string(v))
 }
@@ -19,13 +19,13 @@ func TestStorage_ShouldAppendAndReturnCorrectValueOnOffset(t *testing.T) {
 func TestStorage_ShouldReturnCorrectValueAfterFlush(t *testing.T) {
 
 	store := storage.NewKVStorage()
-	store.Append([]byte("hello"))
-	store.Append([]byte("hey!"))
+	store.Append("12345", []byte("hello"))
+	store.Append("12345", []byte("hey!"))
 
-	store.Flush()
-	store.Append([]byte("bye"))
+	store.Flush("12345")
+	store.Append("12345", []byte("bye"))
 
-	v, err := store.Get(2)
+	v, err := store.Get("12345", 0)
 	assert.Nil(t, err)
 	assert.Equal(t, []byte("bye"), v)
 }
