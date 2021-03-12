@@ -35,6 +35,7 @@ func (r *registry) byNegativeOffset(ctx context.Context, hash string, offsetArg 
 						<-r.nextMessageAvailable()
 						continue
 					default:
+						closeChannels(ch)
 						return
 					}
 				}
