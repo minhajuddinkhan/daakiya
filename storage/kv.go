@@ -65,22 +65,40 @@ func (s *kvStore) Get(hash string, offset uint64) ([]byte, error) {
 	defer s.Mutex.Unlock()
 	q, ok := s.queues[hash]
 	if !ok {
-		return nil, &ErrHashNotFound{Message: fmt.Sprintf("cannot find hash at offset %s", hash)}
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("cannot find hash at offset %s", hash)}
 	}
 
 	if offset > uint64(q.offset) {
-		return nil, &OffsetUnavailable{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
+
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
 	}
 
 	message, err := q.get(offset)
 	if err != nil {
-		return nil, &OffsetNotFound{message: fmt.Sprintf("cannot find error at offset %d", offset)}
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("cannot find error at offset %d", offset)}
 	}
 
 	return message, nil
 }
 
-func (s *kvStore) GetLastAvailableOffset(hash string) (uint, error) {
+func (s *kvStore) GetLatestOffset(hash string) (uint, error) {
+
+	v, ok := s.queues[hash]
+	if !ok {
+		return 0, &ErrHashNotFound{Message: fmt.Sprintf("cannot find hash: %s", hash)}
+	}
+
+	max := 0
+	for k := range v.messages {
+		if k > uint64(max) {
+			max = int(k)
+		}
+	}
+
+	return uint(max), nil
+
+}
+func (s *kvStore) GetOldestOffset(hash string) (uint, error) {
 	v, ok := s.queues[hash]
 	if !ok {
 		return 0, &ErrHashNotFound{Message: fmt.Sprintf("cannot find hash: %s", hash)}

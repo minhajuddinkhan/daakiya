@@ -36,7 +36,7 @@ func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
 
 }
 
-func (c *cassandra) lastAvailableOffset(hash string) (uint, error) {
+func (c *cassandra) oldestOffset(hash string) (uint, error) {
 
 	sess, err := c.session()
 	if err != nil {
@@ -47,7 +47,25 @@ func (c *cassandra) lastAvailableOffset(hash string) (uint, error) {
 		Query(`SELECT MIN(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, hash).
 		Scan(&lastAvailableOffset)
 	if err != nil {
+		return 0, &ErrHashNotFound{Message: err.Error()}
+	}
+
+	return uint(lastAvailableOffset), nil
+
+}
+
+func (c *cassandra) latestOffset(hash string) (uint, error) {
+
+	sess, err := c.session()
+	if err != nil {
 		return 0, err
+	}
+	var lastAvailableOffset uint64
+	err = sess.
+		Query(`SELECT MAX(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, hash).
+		Scan(&lastAvailableOffset)
+	if err != nil {
+		return 0, &ErrHashNotFound{Message: err.Error()}
 	}
 
 	return uint(lastAvailableOffset), nil
@@ -65,11 +83,11 @@ func (c *cassandra) session() (*gocql.Session, error) {
 	return c.sess, nil
 }
 
-func (c *cassandra) synchronizeOffset(hash string) error {
+func (c *cassandra) synchronizeOffsetOnStart(hash string) error {
 
 	c.Lock()
 	if !c.synchronized {
-		o, err := c.lastAvailableOffset(hash)
+		o, err := c.oldestOffset(hash)
 		if err != nil {
 			c.Unlock()
 			return err
@@ -88,7 +106,7 @@ func (c *cassandra) Append(hash string, message []byte) error {
 		return err
 	}
 
-	if err := c.synchronizeOffset(hash); err != nil {
+	if err := c.synchronizeOffsetOnStart(hash); err != nil {
 		return err
 	}
 
@@ -104,7 +122,7 @@ func (c *cassandra) Append(hash string, message []byte) error {
 	}
 	if err = session.Query(q, args...).Exec(); err != nil {
 		if err == gocql.ErrNotFound {
-			return &OffsetNotFound{message: err.Error()}
+			return &OffsetNotFound{Message: err.Error()}
 		}
 		return err
 	}
@@ -117,9 +135,10 @@ func (c *cassandra) Flush(hash string) {
 func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
 
 	c.Lock()
+
 	if offset > uint64(c.offset) {
 		c.Unlock()
-		return nil, &OffsetUnavailable{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
 	}
 	c.Unlock()
 
@@ -133,14 +152,20 @@ func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
 
 	var bytes []byte
 	if err := session.Query(q, args...).Scan(&bytes); err != nil {
+		fmt.Println("2 > OFFSET UNAVAILABLE | REQUESTED | CURRENT", offset, c.offset)
+
 		if err == gocql.ErrNotFound {
-			return nil, &OffsetNotFound{message: err.Error()}
+			return nil, &OffsetNotFound{Message: err.Error()}
 		}
 		return nil, err
 	}
 	return bytes, nil
 }
 
-func (c *cassandra) GetLastAvailableOffset(hash string) (uint, error) {
-	return c.lastAvailableOffset(hash)
+func (c *cassandra) GetOldestOffset(hash string) (uint, error) {
+	return c.oldestOffset(hash)
+}
+
+func (c *cassandra) GetLatestOffset(hash string) (uint, error) {
+	return c.latestOffset(hash)
 }

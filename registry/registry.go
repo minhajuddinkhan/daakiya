@@ -2,7 +2,6 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
 	"github.com/minhajuddinkhan/daakiya/storage"
@@ -12,20 +11,23 @@ import (
 type Registry interface {
 	Append(hash string, message []byte)
 	FromOffset(context context.Context, hash string, offset int) (chan []byte, error)
+	// NextMessageAvailable() chan struct{}
 }
 type registry struct {
-	store storage.Storage
-	cond  *sync.Cond
+	store         storage.Storage
+	cond          *sync.Cond
+	offsetFetcher Fetcher
 }
 
 func NewRegistry(store storage.Storage) Registry {
 	return &registry{
-		store: store,
-		cond:  sync.NewCond(&sync.Mutex{}),
+		store:         store,
+		cond:          sync.NewCond(&sync.Mutex{}),
+		offsetFetcher: NewOffsetFetcher(store),
 	}
 }
 
-//Append Append
+//Append adds message in the store
 func (r *registry) Append(hash string, message []byte) {
 	r.cond.L.Lock()
 	r.cond.Broadcast()
@@ -49,67 +51,95 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 //FromOffset returns a channel that provides all available messages
 func (r *registry) FromOffset(ctx context.Context, hash string, offset int) (chan []byte, error) {
 
-	retryIfLastOffsetExpiresBetweenFetchTime := false
-	oldestOffset, err := r.store.GetLastAvailableOffset(hash)
-	if err != nil {
-		return nil, &ErrOffsetUnavailable{Message: err.Error()}
-	}
-
-	if offset >= 0 {
-		if uint(offset) <= oldestOffset {
-			return nil, &ErrOffsetUnavailable{Message: fmt.Sprintf("offset %d unavailable on disk", offset)}
-		}
-	}
-
 	if offset < 0 {
-		offset = int(oldestOffset)
-		retryIfLastOffsetExpiresBetweenFetchTime = true
+		return r.byNegativeOffset(ctx, hash, offset)
 	}
 
-	ch := make(chan []byte)
+	return r.byPositiveOffset(ctx, hash, offset)
 
-	closeChannels := func(channels ...chan []byte) {
-		fmt.Println("closing channels.")
-		for _, c := range channels {
-			close(c)
-		}
-	}
+	// oldestOffset, latestOffset, err := r.getLimitingOffsets(hash)
+	// noNewMessages := false
+	// if err != nil {
+	// 	switch err.(type) {
 
-	go func() {
-		for {
+	// 	case *storage.ErrHashNotFound:
+	// 		noNewMessages = true
+	// 		break
 
-			select {
-			case <-ctx.Done():
-				closeChannels(ch)
-				return
-			default:
+	// 	default:
+	// 		return nil, &ErrOffsetUnavailable{Message: err.Error()}
 
-				val, err := r.store.Get(hash, uint64(offset))
-				if err != nil {
-					switch err.(type) {
-					case *storage.OffsetUnavailable:
-						<-r.nextMessageAvailable()
-						continue
+	// 	}
+	// }
 
-					case *storage.OffsetNotFound:
-						if retryIfLastOffsetExpiresBetweenFetchTime {
-							offset++
-							continue
-						}
-						closeChannels(ch)
-						return
+	// if !retryIfLastOffsetExpiresBetweenFetchTime {
 
-					default:
-						closeChannels(ch)
-						return
-					}
-				}
-				ch <- val
-				offset++
-			}
+	// }
 
-		}
-	}()
-	return ch, nil
+	// if retryIfLastOffsetExpiresBetweenFetchTime && noNewMessages {
+	// 	offset = 0
+	// } else if retryIfLastOffsetExpiresBetweenFetchTime && !noNewMessages {
+
+	// }
+	// // return nil, &ErrOffsetUnavailable{Message: err.Error()}
+
+	// // else {
+	// // 	offset = int(oldestOffset)
+	// // }
+
+	// if offset >= 0 && !retryIfLastOffsetExpiresBetweenFetchTime {
+	// 	if uint(offset) < oldestOffset {
+	// 		return nil, &ErrOffsetUnavailable{Message: fmt.Sprintf("offset %d unavailable on disk", offset)}
+	// 	}
+
+	// 	if uint(offset) > latestOffset {
+	// 		return nil, &ErrOffsetUnavailable{Message: fmt.Sprintf("offset %d unavailable on disk", offset)}
+	// 	}
+	// }
+
+	// ch := make(chan []byte)
+
+	// closeChannels := func(channels ...chan []byte) {
+	// 	for _, c := range channels {
+	// 		close(c)
+	// 	}
+	// }
+
+	// go func() {
+	// 	for {
+
+	// 		select {
+	// 		case <-ctx.Done():
+	// 			closeChannels(ch)
+	// 			return
+	// 		default:
+
+	// 			val, err := r.store.Get(hash, uint64(offset))
+	// 			if err != nil {
+	// 				switch err.(type) {
+	// 				case *storage.OffsetUnavailable:
+	// 					<-r.nextMessageAvailable()
+	// 					continue
+
+	// 				case *storage.OffsetNotFound:
+	// 					if retryIfLastOffsetExpiresBetweenFetchTime {
+	// 						offset++
+	// 						continue
+	// 					}
+	// 					closeChannels(ch)
+	// 					return
+
+	// 				default:
+	// 					closeChannels(ch)
+	// 					return
+	// 				}
+	// 			}
+	// 			ch <- val
+	// 			offset++
+	// 		}
+
+	// 	}
+	// }()
+	// return ch, nil
 
 }

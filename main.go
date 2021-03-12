@@ -29,6 +29,9 @@ func main() {
 	d := daakiya.NewDaakiya(registry)
 
 	go func() {
+		fmt.Println("waiting...")
+		time.Sleep(5 * time.Second)
+		fmt.Println("writing now..")
 		i := 0
 		j := 0
 		for {
@@ -43,7 +46,7 @@ func main() {
 				// time.Sleep(time.Second)
 
 			}
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(2 * time.Second)
 			i = 0
 		}
 	}()
