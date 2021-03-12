@@ -1,4 +1,4 @@
-package registry
+package daakiyaa
 
 import (
 	"context"
@@ -6,24 +6,22 @@ import (
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
-func (r *registry) byPositiveOffset(ctx context.Context, query Query) (chan []byte, error) {
-
-	offset, err := r.offsetFetcher.Fetch(query)
-	if err != nil {
-		return nil, err
-	}
+func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byte, error) {
 
 	ch := make(chan []byte)
 	closeChannels := func(channels ...chan []byte) {
 		for _, c := range channels {
 			close(c)
 		}
-		return
 	}
 
 	go func() {
 
-		for {
+		var offset uint
+
+		waiting := true
+
+		for waiting {
 			select {
 			case <-ctx.Done():
 				closeChannels(ch)
@@ -31,18 +29,42 @@ func (r *registry) byPositiveOffset(ctx context.Context, query Query) (chan []by
 
 			default:
 
-				sq := storage.Query{
-					Topic:  query.Topic,
-					Hash:   query.Hash,
-					Offset: uint64(query.Offset),
-				}
-
-				val, err := r.store.Get(sq)
+				o, err := r.offsetFetcher.Fetch(query)
 				if err != nil {
 					switch err.(type) {
 					case *storage.ErrHashNotFound:
 						<-r.nextMessageAvailable()
 						continue
+					default:
+						closeChannels(ch)
+						return
+					}
+				}
+
+				offset = o
+				waiting = false
+				break
+			}
+
+		}
+
+		for {
+
+			select {
+			case <-ctx.Done():
+				closeChannels(ch)
+				return
+
+			default:
+				sq := storage.Query{
+					Topic:  query.Topic,
+					Hash:   query.Hash,
+					Offset: uint64(offset),
+				}
+
+				val, err := r.store.Get(sq)
+				if err != nil {
+					switch err.(type) {
 
 					case *storage.OffsetNotFound:
 						<-r.nextMessageAvailable()
@@ -56,9 +78,9 @@ func (r *registry) byPositiveOffset(ctx context.Context, query Query) (chan []by
 				ch <- val
 				offset++
 			}
-
 		}
 	}()
 
 	return ch, nil
+
 }

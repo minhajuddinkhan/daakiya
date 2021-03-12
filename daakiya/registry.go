@@ -1,4 +1,4 @@
-package registry
+package daakiyaa
 
 import (
 	"context"
@@ -8,19 +8,19 @@ import (
 )
 
 //Registry Registry
-type Registry interface {
+type Daakiya interface {
 	Append(m AppendMessage) error
 	FromOffset(context context.Context, q Query) (chan []byte, error)
 	// NextMessageAvailable() chan struct{}
 }
-type registry struct {
+type daakiya struct {
 	store         storage.Storage
 	cond          *sync.Cond
 	offsetFetcher Fetcher
 }
 
-func NewRegistry(store storage.Storage) Registry {
-	return &registry{
+func NewDaakiya(store storage.Storage) Daakiya {
+	return &daakiya{
 		store:         store,
 		cond:          sync.NewCond(&sync.Mutex{}),
 		offsetFetcher: NewOffsetFetcher(store),
@@ -28,7 +28,7 @@ func NewRegistry(store storage.Storage) Registry {
 }
 
 //Append adds message in the store
-func (r *registry) Append(message AppendMessage) error {
+func (r *daakiya) Append(message AppendMessage) error {
 
 	if err := message.Validate(); err != nil {
 		return err
@@ -45,7 +45,7 @@ func (r *registry) Append(message AppendMessage) error {
 	})
 }
 
-func (r *registry) nextMessageAvailable() chan struct{} {
+func (r *daakiya) nextMessageAvailable() chan struct{} {
 
 	c := make(chan struct{})
 	r.cond.L.Lock()
@@ -59,7 +59,7 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 }
 
 //FromOffset returns a channel that provides all available messages
-func (r *registry) FromOffset(ctx context.Context, q Query) (chan []byte, error) {
+func (r *daakiya) FromOffset(ctx context.Context, q Query) (chan []byte, error) {
 	if q.Offset < 0 {
 		return r.byNegativeOffset(ctx, q)
 	}

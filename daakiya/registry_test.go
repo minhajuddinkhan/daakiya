@@ -1,4 +1,4 @@
-package registry_test
+package daakiyaa_test
 
 // import (
 // 	"context"

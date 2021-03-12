@@ -1,4 +1,4 @@
-package registry
+package daakiyaa
 
 type AppendMessage struct {
 	Topic string

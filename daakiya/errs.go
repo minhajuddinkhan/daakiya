@@ -1,4 +1,4 @@
-package registry
+package daakiyaa
 
 //ErrOffsetUnavailable ErrOffsetUnavailable
 type ErrOffsetUnavailable struct {
