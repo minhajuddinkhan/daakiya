@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/gocql/gocql"
 	daakiyaa "github.com/minhajuddinkhan/daakiya/daakiya"
 	registry "github.com/minhajuddinkhan/daakiya/daakiya"
@@ -39,10 +40,11 @@ func main() {
 	channel, err := dk.FromOffset(ctx, registry.Query{
 		Hash:   "CLIENT_1",
 		Topic:  "TEST_TOPIC",
-		Offset: registry.OLDEST,
+		Offset: 0,
 	})
 
 	if err != nil {
+		spew.Dump(err)
 		log.Fatal(err)
 	}
 

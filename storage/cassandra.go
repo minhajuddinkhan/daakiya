@@ -36,6 +36,82 @@ func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
 
 }
 
+func (c *cassandra) Append(m Message) error {
+
+	session, err := c.session()
+	if err != nil {
+		return err
+	}
+
+	if err := c.synchronizeOffsetOnStart(m.Hash, m.Topic); err != nil {
+		return err
+	}
+
+	q := `INSERT INTO messages
+	(hash, topic, offset, data) VALUES (?, ?, ?, ?)
+	 USING TTL ?`
+
+	args := []interface{}{
+		m.Hash,
+		m.Topic,
+		c.offset,
+		m.Value,
+		c.ttl,
+	}
+
+	c.Lock()
+	defer c.Unlock()
+	if err = session.Query(q, args...).Exec(); err != nil {
+		if err == gocql.ErrNotFound {
+			return &OffsetNotFound{Message: err.Error()}
+		}
+		return err
+	}
+	c.offset++
+	return nil
+}
+
+func (c *cassandra) Get(q Query) ([]byte, error) {
+
+	c.Lock()
+
+	if q.Offset > uint64(c.offset) {
+		c.Unlock()
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", q.Offset)}
+	}
+	c.Unlock()
+
+	session, err := c.session()
+	if err != nil {
+		return nil, err
+	}
+
+	query := `SELECT data FROM messages WHERE hash = ? AND offset = ? AND topic = ?`
+	args := []interface{}{q.Hash, q.Offset, q.Topic}
+
+	var bytes []byte
+	if err := session.Query(query, args...).Scan(&bytes); err != nil {
+
+		if err == gocql.ErrNotFound {
+			return nil, &OffsetNotFound{Message: err.Error()}
+		}
+		return nil, err
+	}
+	return bytes, nil
+}
+
+func (c *cassandra) Flush(hash, topic string) {
+	//do nothing for now...
+}
+
+func (c *cassandra) GetOldestOffset(hash, topic string) (uint, error) {
+	return c.oldestOffset(hash, topic)
+}
+
+func (c *cassandra) GetLatestOffset(hash, topic string) (uint, error) {
+	return c.latestOffset(hash, topic)
+}
+
 func (c *cassandra) oldestOffset(hash, topic string) (uint, error) {
 
 	sess, err := c.session()
@@ -98,74 +174,4 @@ func (c *cassandra) synchronizeOffsetOnStart(hash string, topic string) error {
 	c.Unlock()
 	return nil
 
-}
-func (c *cassandra) Append(m Message) error {
-
-	session, err := c.session()
-	if err != nil {
-		return err
-	}
-
-	if err := c.synchronizeOffsetOnStart(m.Hash, m.Topic); err != nil {
-		return err
-	}
-
-	q := `INSERT INTO messages
-	(hash, topic, offset, data) VALUES (?, ?, ?, ?)
-	 USING TTL ?`
-
-	args := []interface{}{
-		m.Hash,
-		m.Topic,
-		c.offset,
-		m.Value,
-		c.ttl,
-	}
-	if err = session.Query(q, args...).Exec(); err != nil {
-		if err == gocql.ErrNotFound {
-			return &OffsetNotFound{Message: err.Error()}
-		}
-		return err
-	}
-	c.offset++
-	return nil
-}
-func (c *cassandra) Flush(hash, topic string) {
-	//do nothing for now...
-}
-func (c *cassandra) Get(q Query) ([]byte, error) {
-
-	c.Lock()
-
-	if q.Offset > uint64(c.offset) {
-		c.Unlock()
-		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", q.Offset)}
-	}
-	c.Unlock()
-
-	session, err := c.session()
-	if err != nil {
-		return nil, err
-	}
-
-	query := `SELECT data FROM messages WHERE hash = ? AND offset = ? AND topic = ?`
-	args := []interface{}{q.Hash, q.Offset, q.Topic}
-
-	var bytes []byte
-	if err := session.Query(query, args...).Scan(&bytes); err != nil {
-
-		if err == gocql.ErrNotFound {
-			return nil, &OffsetNotFound{Message: err.Error()}
-		}
-		return nil, err
-	}
-	return bytes, nil
-}
-
-func (c *cassandra) GetOldestOffset(hash, topic string) (uint, error) {
-	return c.oldestOffset(hash, topic)
-}
-
-func (c *cassandra) GetLatestOffset(hash, topic string) (uint, error) {
-	return c.latestOffset(hash, topic)
 }

@@ -11,7 +11,6 @@ import (
 type Daakiya interface {
 	Append(m AppendMessage) error
 	FromOffset(context context.Context, q Query) (chan []byte, error)
-	// NextMessageAvailable() chan struct{}
 }
 type daakiya struct {
 	store         storage.Storage
@@ -35,14 +34,25 @@ func (r *daakiya) Append(message AppendMessage) error {
 	}
 
 	r.cond.L.Lock()
-	defer r.cond.L.Unlock()
-	r.cond.Broadcast()
+	defer func() {
+		r.cond.Broadcast()
+		r.cond.L.Unlock()
+
+	}()
 
 	return r.store.Append(storage.Message{
 		Topic: message.Topic,
 		Hash:  message.Hash,
 		Value: message.Value,
 	})
+}
+
+//FromOffset returns a channel that provides all available messages
+func (r *daakiya) FromOffset(ctx context.Context, q Query) (chan []byte, error) {
+	if q.Offset < 0 {
+		return r.byNegativeOffset(ctx, q)
+	}
+	return r.byPositiveOffset(ctx, q)
 }
 
 func (r *daakiya) nextMessageAvailable() chan struct{} {
@@ -56,12 +66,4 @@ func (r *daakiya) nextMessageAvailable() chan struct{} {
 	}(c)
 	r.cond.L.Unlock()
 	return c
-}
-
-//FromOffset returns a channel that provides all available messages
-func (r *daakiya) FromOffset(ctx context.Context, q Query) (chan []byte, error) {
-	if q.Offset < 0 {
-		return r.byNegativeOffset(ctx, q)
-	}
-	return r.byPositiveOffset(ctx, q)
 }
