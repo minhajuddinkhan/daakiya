@@ -9,7 +9,7 @@ import (
 
 //Registry Registry
 type Registry interface {
-	Append(m Message) error
+	Append(m AppendMessage) error
 	FromOffset(context context.Context, q Query) (chan []byte, error)
 	// NextMessageAvailable() chan struct{}
 }
@@ -28,7 +28,11 @@ func NewRegistry(store storage.Storage) Registry {
 }
 
 //Append adds message in the store
-func (r *registry) Append(message Message) error {
+func (r *registry) Append(message AppendMessage) error {
+
+	if err := message.Validate(); err != nil {
+		return err
+	}
 
 	r.cond.L.Lock()
 	defer r.cond.L.Unlock()

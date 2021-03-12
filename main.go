@@ -37,7 +37,7 @@ func main() {
 		for {
 			for i < 5 {
 
-				err := reg.Append(registry.Message{
+				err := reg.Append(registry.AppendMessage{
 					Topic: "LOCATION",
 					Hash:  "12345",
 					Value: []byte(fmt.Sprintf("%d", j)),

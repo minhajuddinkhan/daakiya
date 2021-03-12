@@ -1,13 +1,12 @@
 package registry
 
-type Message struct {
-	Topic  string
-	Hash   string
-	Offset uint
-	Value  []byte
+type AppendMessage struct {
+	Topic string
+	Hash  string
+	Value []byte
 }
 
-func (m *Message) Validate() error {
+func (m *AppendMessage) Validate() error {
 
 	if m.Topic == "" {
 		return &ErrInvalidMessage{Message: "Topic cannot be empty"}
