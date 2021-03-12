@@ -58,7 +58,8 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 		ctx, cancelFunc := context.WithCancel(context.Background())
 		defer cancelFunc()
 
-		queue, err := d.registry.FromOffset(ctx, clientID, offset)
+		query := registry.Query{Hash: clientID, Topic: "LOCATION", Offset: offset}
+		queue, err := d.registry.FromOffset(ctx, query)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return

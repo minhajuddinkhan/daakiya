@@ -9,8 +9,8 @@ import (
 
 //Registry Registry
 type Registry interface {
-	Append(hash string, message []byte)
-	FromOffset(context context.Context, hash string, offset int) (chan []byte, error)
+	Append(m Message) error
+	FromOffset(context context.Context, q Query) (chan []byte, error)
 	// NextMessageAvailable() chan struct{}
 }
 type registry struct {
@@ -28,11 +28,17 @@ func NewRegistry(store storage.Storage) Registry {
 }
 
 //Append adds message in the store
-func (r *registry) Append(hash string, message []byte) {
+func (r *registry) Append(message Message) error {
+
 	r.cond.L.Lock()
+	defer r.cond.L.Unlock()
 	r.cond.Broadcast()
-	r.store.Append(hash, message)
-	r.cond.L.Unlock()
+
+	return r.store.Append(storage.Message{
+		Topic: message.Topic,
+		Hash:  message.Hash,
+		Value: message.Value,
+	})
 }
 
 func (r *registry) nextMessageAvailable() chan struct{} {
@@ -49,9 +55,9 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 }
 
 //FromOffset returns a channel that provides all available messages
-func (r *registry) FromOffset(ctx context.Context, hash string, offset int) (chan []byte, error) {
-	if offset < 0 {
-		return r.byNegativeOffset(ctx, hash, offset)
+func (r *registry) FromOffset(ctx context.Context, q Query) (chan []byte, error) {
+	if q.Offset < 0 {
+		return r.byNegativeOffset(ctx, q)
 	}
-	return r.byPositiveOffset(ctx, hash, offset)
+	return r.byPositiveOffset(ctx, q)
 }

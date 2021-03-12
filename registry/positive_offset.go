@@ -6,9 +6,9 @@ import (
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
-func (r *registry) byPositiveOffset(ctx context.Context, hash string, offsetArg int) (chan []byte, error) {
+func (r *registry) byPositiveOffset(ctx context.Context, query Query) (chan []byte, error) {
 
-	offset, err := r.offsetFetcher.Fetch(hash, offsetArg)
+	offset, err := r.offsetFetcher.Fetch(query)
 	if err != nil {
 		return nil, err
 	}
@@ -31,7 +31,13 @@ func (r *registry) byPositiveOffset(ctx context.Context, hash string, offsetArg 
 
 			default:
 
-				val, err := r.store.Get(hash, uint64(offset))
+				sq := storage.Query{
+					Topic:  query.Topic,
+					Hash:   query.Hash,
+					Offset: uint64(query.Offset),
+				}
+
+				val, err := r.store.Get(sq)
 				if err != nil {
 					switch err.(type) {
 					case *storage.ErrHashNotFound:

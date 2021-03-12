@@ -2,11 +2,12 @@ package registry
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
-func (r *registry) byNegativeOffset(ctx context.Context, hash string, offsetArg int) (chan []byte, error) {
+func (r *registry) byNegativeOffset(ctx context.Context, query Query) (chan []byte, error) {
 
 	ch := make(chan []byte)
 	closeChannels := func(channels ...chan []byte) {
@@ -18,6 +19,7 @@ func (r *registry) byNegativeOffset(ctx context.Context, hash string, offsetArg 
 	go func() {
 
 		var offset uint
+
 		waiting := true
 
 		for waiting {
@@ -28,7 +30,7 @@ func (r *registry) byNegativeOffset(ctx context.Context, hash string, offsetArg 
 
 			default:
 
-				o, err := r.offsetFetcher.Fetch(hash, offsetArg)
+				o, err := r.offsetFetcher.Fetch(query)
 				if err != nil {
 					switch err.(type) {
 					case *storage.ErrHashNotFound:
@@ -55,7 +57,14 @@ func (r *registry) byNegativeOffset(ctx context.Context, hash string, offsetArg 
 				return
 
 			default:
-				val, err := r.store.Get(hash, uint64(offset))
+				sq := storage.Query{
+					Topic:  query.Topic,
+					Hash:   query.Hash,
+					Offset: uint64(offset),
+				}
+
+				fmt.Println("QUERYIED OFFSET", sq.Offset)
+				val, err := r.store.Get(sq)
 				if err != nil {
 					switch err.(type) {
 

@@ -1,11 +1,19 @@
 package registry
 
 import (
+	"fmt"
+
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
 type Fetcher interface {
-	Fetch(hash string, offset int) (uint, error)
+	Fetch(q Query) (uint, error)
+}
+
+type Query struct {
+	Hash   string
+	Topic  string
+	Offset int
 }
 
 const LATEST = -1
@@ -19,39 +27,42 @@ func NewOffsetFetcher(store storage.Storage) Fetcher {
 	return &fetcher{store: store}
 }
 
-func (f *fetcher) Fetch(hash string, offset int) (uint, error) {
+func (f *fetcher) Fetch(q Query) (uint, error) {
 
-	if offset == LATEST {
-		return f.store.GetLatestOffset(hash)
+	if q.Offset == LATEST {
+		return f.store.GetLatestOffset(q.Hash, q.Topic)
 	}
 
-	if offset == OLDEST {
-		return f.store.GetOldestOffset(hash)
+	if q.Offset == OLDEST {
+		return f.store.GetOldestOffset(q.Hash, q.Topic)
+	}
+	if q.Offset < 0 {
+		return 0, fmt.Errorf("invalid offset range provided. Must be -2, -1 or greater than 0")
 	}
 
-	currOldestOffset, currLatestOffset, err := f.getLimitingOffsets(hash)
+	currOldestOffset, currLatestOffset, err := f.getLimitingOffsets(q.Hash, q.Topic)
 	if err != nil {
 		return 0, err
 	}
 
-	if offset > int(currLatestOffset) {
+	if q.Offset > int(currLatestOffset) {
 		return 0, &storage.OffsetNotFound{}
 	}
-	if offset < int(currOldestOffset) {
+	if q.Offset < int(currOldestOffset) {
 		return 0, &storage.OffsetNotFound{}
 	}
 
-	return uint(offset), nil
+	return uint(q.Offset), nil
 }
 
-func (f *fetcher) getLimitingOffsets(hash string) (oldest, latest uint, err error) {
+func (f *fetcher) getLimitingOffsets(hash, topic string) (oldest, latest uint, err error) {
 
-	oldestOffset, err := f.store.GetOldestOffset(hash)
+	oldestOffset, err := f.store.GetOldestOffset(hash, topic)
 	if err != nil {
 		return 0, 0, err
 	}
 
-	latestOffset, err := f.store.GetLatestOffset(hash)
+	latestOffset, err := f.store.GetLatestOffset(hash, topic)
 	if err != nil {
 		return 0, 0, err
 	}

@@ -36,7 +36,7 @@ func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
 
 }
 
-func (c *cassandra) oldestOffset(hash string) (uint, error) {
+func (c *cassandra) oldestOffset(hash, topic string) (uint, error) {
 
 	sess, err := c.session()
 	if err != nil {
@@ -44,7 +44,7 @@ func (c *cassandra) oldestOffset(hash string) (uint, error) {
 	}
 	var lastAvailableOffset uint64
 	err = sess.
-		Query(`SELECT MIN(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, hash).
+		Query(`SELECT MIN(offset) FROM messages WHERE hash = ? AND topic = ? ALLOW FILTERING`, hash, topic).
 		Scan(&lastAvailableOffset)
 	if err != nil {
 		return 0, &ErrHashNotFound{Message: err.Error()}
@@ -54,7 +54,7 @@ func (c *cassandra) oldestOffset(hash string) (uint, error) {
 
 }
 
-func (c *cassandra) latestOffset(hash string) (uint, error) {
+func (c *cassandra) latestOffset(hash, topic string) (uint, error) {
 
 	sess, err := c.session()
 	if err != nil {
@@ -62,7 +62,7 @@ func (c *cassandra) latestOffset(hash string) (uint, error) {
 	}
 	var lastAvailableOffset uint64
 	err = sess.
-		Query(`SELECT MAX(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, hash).
+		Query(`SELECT MAX(offset) FROM messages WHERE hash = ? AND topic = ? ALLOW FILTERING`, hash, topic).
 		Scan(&lastAvailableOffset)
 	if err != nil {
 		return 0, &ErrHashNotFound{Message: err.Error()}
@@ -83,11 +83,11 @@ func (c *cassandra) session() (*gocql.Session, error) {
 	return c.sess, nil
 }
 
-func (c *cassandra) synchronizeOffsetOnStart(hash string) error {
+func (c *cassandra) synchronizeOffsetOnStart(hash string, topic string) error {
 
 	c.Lock()
 	if !c.synchronized {
-		o, err := c.oldestOffset(hash)
+		o, err := c.oldestOffset(hash, topic)
 		if err != nil {
 			c.Unlock()
 			return err
@@ -99,25 +99,26 @@ func (c *cassandra) synchronizeOffsetOnStart(hash string) error {
 	return nil
 
 }
-func (c *cassandra) Append(hash string, message []byte) error {
+func (c *cassandra) Append(m Message) error {
 
 	session, err := c.session()
 	if err != nil {
 		return err
 	}
 
-	if err := c.synchronizeOffsetOnStart(hash); err != nil {
+	if err := c.synchronizeOffsetOnStart(m.Hash, m.Topic); err != nil {
 		return err
 	}
 
 	q := `INSERT INTO messages
-	(client_id, offset, data) VALUES (?, ?, ?)
+	(hash, topic, offset, data) VALUES (?, ?, ?, ?)
 	 USING TTL ?`
 
 	args := []interface{}{
-		hash,
+		m.Hash,
+		m.Topic,
 		c.offset,
-		message,
+		m.Value,
 		c.ttl,
 	}
 	if err = session.Query(q, args...).Exec(); err != nil {
@@ -129,16 +130,16 @@ func (c *cassandra) Append(hash string, message []byte) error {
 	c.offset++
 	return nil
 }
-func (c *cassandra) Flush(hash string) {
+func (c *cassandra) Flush(hash, topic string) {
 	//do nothing for now...
 }
-func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
+func (c *cassandra) Get(q Query) ([]byte, error) {
 
 	c.Lock()
 
-	if offset > uint64(c.offset) {
+	if q.Offset > uint64(c.offset) {
 		c.Unlock()
-		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
+		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", q.Offset)}
 	}
 	c.Unlock()
 
@@ -147,12 +148,11 @@ func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
 		return nil, err
 	}
 
-	q := `SELECT data FROM messages WHERE client_id = ? AND offset = ?`
-	args := []interface{}{hash, offset}
+	query := `SELECT data FROM messages WHERE hash = ? AND offset = ? AND topic = ?`
+	args := []interface{}{q.Hash, q.Offset, q.Topic}
 
 	var bytes []byte
-	if err := session.Query(q, args...).Scan(&bytes); err != nil {
-		fmt.Println("2 > OFFSET UNAVAILABLE | REQUESTED | CURRENT", offset, c.offset)
+	if err := session.Query(query, args...).Scan(&bytes); err != nil {
 
 		if err == gocql.ErrNotFound {
 			return nil, &OffsetNotFound{Message: err.Error()}
@@ -162,10 +162,10 @@ func (c *cassandra) Get(hash string, offset uint64) ([]byte, error) {
 	return bytes, nil
 }
 
-func (c *cassandra) GetOldestOffset(hash string) (uint, error) {
-	return c.oldestOffset(hash)
+func (c *cassandra) GetOldestOffset(hash, topic string) (uint, error) {
+	return c.oldestOffset(hash, topic)
 }
 
-func (c *cassandra) GetLatestOffset(hash string) (uint, error) {
-	return c.latestOffset(hash)
+func (c *cassandra) GetLatestOffset(hash, topic string) (uint, error) {
+	return c.latestOffset(hash, topic)
 }

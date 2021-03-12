@@ -24,9 +24,9 @@ func main() {
 		log.Fatal(err)
 	}
 
-	registry := registry.NewRegistry(storage)
+	reg := registry.NewRegistry(storage)
 
-	d := daakiya.NewDaakiya(registry)
+	d := daakiya.NewDaakiya(reg)
 
 	go func() {
 		fmt.Println("waiting...")
@@ -37,8 +37,15 @@ func main() {
 		for {
 			for i < 5 {
 
-				registry.Append("12345", []byte(fmt.Sprintf("%d", j)))
-				// registries["12345"].Append([]byte(fmt.Sprintf("%d", i)))
+				err := reg.Append(registry.Message{
+					Topic: "LOCATION",
+					Hash:  "12345",
+					Value: []byte(fmt.Sprintf("%d", j)),
+				})
+				if err != nil {
+					fmt.Println(err)
+					log.Fatal(err)
+				}
 
 				// fmt.Println("appending...", j)
 				i++
