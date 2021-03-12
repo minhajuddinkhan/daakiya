@@ -49,6 +49,6 @@ func (s *kvStore) MemSize() uint16 {
 	return uint16(len(s.messages))
 }
 
-func (s *kvStore) LastOffset() uint64 {
-	return s.offset
+func (s *kvStore) GetLastAvailableOffset() (uint, error) {
+	return uint(s.offset), nil
 }

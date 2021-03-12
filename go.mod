@@ -1,4 +1,4 @@
-module github.com/minhajuddinkhan/mdelivery
+module github.com/minhajuddinkhan/daakiya
 
 go 1.13
 

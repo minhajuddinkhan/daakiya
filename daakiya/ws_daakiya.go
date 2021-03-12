@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/minhajuddinkhan/mdelivery/registry"
+	"github.com/minhajuddinkhan/daakiya/registry"
 )
 
 //Daakia Daakia
@@ -51,8 +51,16 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 
 		offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
 		if err != nil {
-			fmt.Println("ERROR?", err)
 			http.Error(w, "invalid offset!", http.StatusInternalServerError)
+			return
+		}
+
+		ctx, cancelFunc := context.WithCancel(context.Background())
+		defer cancelFunc()
+
+		queue, err := d.registries[clientID].FromOffset(ctx, offset)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
 
@@ -62,10 +70,6 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 			return
 		}
 		defer c.Close()
-
-		ctx := context.Background()
-		queue, cancelFunc := d.registries[clientID].FromOffset(ctx, uint(offset))
-		defer cancelFunc()
 
 		for {
 			select {
@@ -78,7 +82,10 @@ func (d *Daakia) EstablishWebsocketConnection() http.HandlerFunc {
 					return
 				}
 			case message := <-queue:
-
+				//channel is closed.
+				if message == nil {
+					return
+				}
 				if err := c.WriteMessage(1, message); err != nil {
 					continue
 				}

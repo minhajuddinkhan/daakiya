@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/minhajuddinkhan/mdelivery/storage"
+	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
 //Registry Registry
 type Registry interface {
 	Append(message []byte)
-	FromOffset(context context.Context, offset uint) (chan []byte, context.CancelFunc)
+	FromOffset(context context.Context, offset int) (chan []byte, error)
 }
 type registry struct {
 	store storage.Storage
@@ -40,7 +40,6 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 
 	r.cond.Wait()
 	go func(channel chan struct{}) {
-
 		channel <- struct{}{}
 	}(c)
 	r.cond.L.Unlock()
@@ -48,30 +47,60 @@ func (r *registry) nextMessageAvailable() chan struct{} {
 }
 
 //FromOffset returns a channel that provides all available messages
-func (r *registry) FromOffset(ctx context.Context, offset uint) (chan []byte, context.CancelFunc) {
+func (r *registry) FromOffset(ctx context.Context, offset int) (chan []byte, error) {
 
-	wCancel, cancelFunc := context.WithCancel(ctx)
+	retryIfLastOffsetExpiresBetweenFetchTime := false
+	oldestOffset, err := r.store.GetLastAvailableOffset()
+	if err != nil {
+		return nil, &ErrOffsetUnavailable{Message: err.Error()}
+	}
+
+	if offset >= 0 {
+		if uint(offset) <= oldestOffset {
+			return nil, &ErrOffsetUnavailable{Message: fmt.Sprintf("offset %d unavailable on disk", offset)}
+		}
+	}
+
+	if offset < 0 {
+		offset = int(oldestOffset)
+		retryIfLastOffsetExpiresBetweenFetchTime = true
+	}
+
 	ch := make(chan []byte)
+
+	closeChannels := func(channels ...chan []byte) {
+		fmt.Println("closing channels.")
+		for _, c := range channels {
+			close(c)
+		}
+	}
+
 	go func() {
 		for {
 
 			select {
-			case <-wCancel.Done():
-				fmt.Println("closing channell..")
-				close(ch)
+			case <-ctx.Done():
+				closeChannels(ch)
 				return
 			default:
+
 				val, err := r.store.Get(uint64(offset))
 				if err != nil {
-					fmt.Println("ERROR?", err)
 					switch err.(type) {
-					case *storage.OffsetNotFound:
+					case *storage.OffsetUnavailable:
 						<-r.nextMessageAvailable()
 						continue
 
+					case *storage.OffsetNotFound:
+						if retryIfLastOffsetExpiresBetweenFetchTime {
+							offset++
+							continue
+						}
+						closeChannels(ch)
+						return
+
 					default:
-						close(ch)
-						fmt.Println("closing chanell in defaults ection..")
+						closeChannels(ch)
 						return
 					}
 				}
@@ -81,6 +110,6 @@ func (r *registry) FromOffset(ctx context.Context, offset uint) (chan []byte, co
 
 		}
 	}()
-	return ch, cancelFunc
+	return ch, nil
 
 }

@@ -6,4 +6,5 @@ type Storage interface {
 	Append(message []byte) error
 	Flush()
 	Get(offset uint64) ([]byte, error)
+	GetLastAvailableOffset() (uint, error)
 }

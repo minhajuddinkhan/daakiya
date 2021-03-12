@@ -3,7 +3,7 @@ package storage_test
 import (
 	"testing"
 
-	"github.com/minhajuddinkhan/mdelivery/storage"
+	"github.com/minhajuddinkhan/daakiya/storage"
 	"github.com/stretchr/testify/assert"
 )
 

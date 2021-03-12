@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gocql/gocql"
-	"github.com/minhajuddinkhan/mdelivery/daakiya"
-	"github.com/minhajuddinkhan/mdelivery/registry"
-	"github.com/minhajuddinkhan/mdelivery/storage"
+	"github.com/minhajuddinkhan/daakiya/daakiya"
+	"github.com/minhajuddinkhan/daakiya/registry"
+	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
 func main() {
@@ -45,7 +45,7 @@ func main() {
 				// time.Sleep(time.Second)
 
 			}
-			time.Sleep(2 * time.Second)
+			time.Sleep(1 * time.Second)
 			i = 0
 		}
 	}()

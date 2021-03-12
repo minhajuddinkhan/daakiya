@@ -21,7 +21,7 @@ func NewCassandraStorage(clientID string, clusterConfig *gocql.ClusterConfig) (S
 	c := &cassandra{
 		clientID:      clientID,
 		clusterConfig: clusterConfig,
-		ttl:           30,
+		ttl:           2,
 		Mutex:         sync.Mutex{},
 		//TODO:: take instead of arguments.
 	}
@@ -32,15 +32,27 @@ func NewCassandraStorage(clientID string, clusterConfig *gocql.ClusterConfig) (S
 	}
 	c.sess = sess
 
-	err = c.sess.
-		Query(`SELECT MAX(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, clientID).
-		Scan(&c.offset)
+	c.offset, err = c.lastAvailableOffset()
+	return c, err
+
+}
+
+func (c *cassandra) lastAvailableOffset() (uint, error) {
+
+	sess, err := c.session()
 	if err != nil {
-		return nil, err
+		return 0, err
+	}
+	var lastAvailableOffset uint64
+	err = sess.
+		Query(`SELECT MAX(offset) FROM messages WHERE client_id = ? ALLOW FILTERING`, c.clientID).
+		Scan(&lastAvailableOffset)
+	if err != nil {
+		return 0, err
 	}
 
-	fmt.Println("setting offset at: ", c.offset)
-	return c, nil
+	return uint(lastAvailableOffset), nil
+
 }
 
 func (c *cassandra) session() (*gocql.Session, error) {
@@ -85,6 +97,13 @@ func (c *cassandra) Flush() {
 }
 func (c *cassandra) Get(offset uint64) ([]byte, error) {
 
+	c.Lock()
+	if offset > uint64(c.offset) {
+		c.Unlock()
+		return nil, &OffsetUnavailable{Message: fmt.Sprintf("message not written on offset %d yet", offset)}
+	}
+	c.Unlock()
+
 	session, err := c.session()
 	if err != nil {
 		return nil, err
@@ -101,4 +120,8 @@ func (c *cassandra) Get(offset uint64) ([]byte, error) {
 		return nil, err
 	}
 	return bytes, nil
+}
+
+func (c *cassandra) GetLastAvailableOffset() (uint, error) {
+	return c.lastAvailableOffset()
 }
