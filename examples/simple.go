@@ -19,6 +19,8 @@ func main() {
 	dk := getDaakiya()
 
 	go func() {
+		time.Sleep(4 * time.Second)
+		// fmt.Println("writing...")
 		//start an thread that pushes messages
 		//to daakiya every second
 		i := 0
@@ -28,6 +30,12 @@ func main() {
 				Hash:  "CLIENT_1",
 				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
 			})
+			dk.Append(registry.AppendMessage{
+				Topic: "TEST_TOPIC_2",
+				Hash:  "CLIENT_1",
+				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
+			})
+
 			time.Sleep(1 * time.Second)
 			i++
 		}
@@ -36,11 +44,12 @@ func main() {
 	ctx, cancelFunc := context.WithCancel(context.Background())
 	defer cancelFunc()
 
+	time.Sleep(1 * time.Second)
 	//start reading messages from the provided offset
 	channel, err := dk.FromOffset(ctx, registry.Query{
 		Hash:   "CLIENT_1",
 		Topic:  "TEST_TOPIC",
-		Offset: 0,
+		Offset: daakiyaa.LATEST,
 	})
 
 	if err != nil {

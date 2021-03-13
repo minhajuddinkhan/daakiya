@@ -2,7 +2,6 @@ package daakiyaa
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
@@ -42,7 +41,6 @@ func (r *daakiya) byPositiveOffset(ctx context.Context, query Query) (chan []byt
 				if err != nil {
 					switch err.(type) {
 					case *storage.ErrHashNotFound:
-						fmt.Println("next message available???")
 						<-r.nextMessageAvailable()
 						continue
 

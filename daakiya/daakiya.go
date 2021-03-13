@@ -2,7 +2,9 @@ package daakiyaa
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"time"
 
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
@@ -14,37 +16,60 @@ type Daakiya interface {
 }
 type daakiya struct {
 	store         storage.Storage
+	mutex         sync.Mutex
 	cond          *sync.Cond
 	offsetFetcher Fetcher
+	latestOffsets map[string]uint
+	synchronized  map[string]bool
 }
 
 func NewDaakiya(store storage.Storage) Daakiya {
-	return &daakiya{
+
+	d := &daakiya{
 		store:         store,
-		cond:          sync.NewCond(&sync.Mutex{}),
+		mutex:         sync.Mutex{},
 		offsetFetcher: NewOffsetFetcher(store),
+		latestOffsets: make(map[string]uint),
+		synchronized:  make(map[string]bool),
 	}
+	d.cond = sync.NewCond(&d.mutex)
+
+	return d
 }
 
 //Append adds message in the store
-func (r *daakiya) Append(message AppendMessage) error {
+func (d *daakiya) Append(message AppendMessage) error {
 
+	t := time.Now()
 	if err := message.Validate(); err != nil {
 		return err
 	}
+	if err := d.synchronize(message.Hash, message.Topic); err != nil {
+		return err
+	}
 
-	r.cond.L.Lock()
-	defer func() {
-		r.cond.Broadcast()
-		r.cond.L.Unlock()
+	d.cond.L.Lock()
+	key := d.getOffsetKey(message.Hash, message.Topic)
+	o := d.latestOffsets[key]
+	var err error
 
-	}()
-
-	return r.store.Append(storage.Message{
-		Topic: message.Topic,
-		Hash:  message.Hash,
-		Value: message.Value,
+	err = d.store.Put(storage.Message{
+		Topic:  message.Topic,
+		Hash:   message.Hash,
+		Value:  message.Value,
+		Offset: o,
 	})
+	if err == nil {
+		o++
+		d.latestOffsets[key] = o
+	}
+
+	d.cond.Broadcast()
+	d.cond.L.Unlock()
+
+	fmt.Println(fmt.Sprintf("append time: %d ms", time.Now().Sub(t).Milliseconds()))
+	return err
+
 }
 
 //FromOffset returns a channel that provides all available messages

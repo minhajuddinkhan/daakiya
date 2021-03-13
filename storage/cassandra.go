@@ -1,19 +1,13 @@
 package storage
 
 import (
-	"fmt"
-	"sync"
-
 	"github.com/gocql/gocql"
 )
 
 type cassandra struct {
 	clusterConfig *gocql.ClusterConfig
 	sess          *gocql.Session
-	sync.Mutex
-	offset       uint
-	ttl          uint16
-	synchronized bool
+	ttl           uint16
 }
 
 //NewCassandraStorage creates a new cassandra storage
@@ -22,7 +16,6 @@ func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
 	c := &cassandra{
 		clusterConfig: clusterConfig,
 		ttl:           30,
-		Mutex:         sync.Mutex{},
 		//TODO:: take instead of arguments.
 	}
 
@@ -33,17 +26,12 @@ func NewCassandraStorage(clusterConfig *gocql.ClusterConfig) (Storage, error) {
 	c.sess = sess
 
 	return c, err
-
 }
 
-func (c *cassandra) Append(m Message) error {
+func (c *cassandra) Put(m Message) error {
 
 	session, err := c.session()
 	if err != nil {
-		return err
-	}
-
-	if err := c.synchronizeOffsetOnStart(m.Hash, m.Topic); err != nil {
 		return err
 	}
 
@@ -54,32 +42,22 @@ func (c *cassandra) Append(m Message) error {
 	args := []interface{}{
 		m.Hash,
 		m.Topic,
-		c.offset,
+		m.Offset,
 		m.Value,
 		c.ttl,
 	}
 
-	c.Lock()
-	defer c.Unlock()
 	if err = session.Query(q, args...).Exec(); err != nil {
 		if err == gocql.ErrNotFound {
 			return &OffsetNotFound{Message: err.Error()}
 		}
 		return err
 	}
-	c.offset++
+
 	return nil
 }
 
 func (c *cassandra) Get(q Query) ([]byte, error) {
-
-	c.Lock()
-
-	if q.Offset > uint64(c.offset) {
-		c.Unlock()
-		return nil, &OffsetNotFound{Message: fmt.Sprintf("message not written on offset %d yet", q.Offset)}
-	}
-	c.Unlock()
 
 	session, err := c.session()
 	if err != nil {
@@ -105,15 +83,6 @@ func (c *cassandra) Flush(hash, topic string) {
 }
 
 func (c *cassandra) GetOldestOffset(hash, topic string) (uint, error) {
-	return c.oldestOffset(hash, topic)
-}
-
-func (c *cassandra) GetLatestOffset(hash, topic string) (uint, error) {
-	return c.latestOffset(hash, topic)
-}
-
-func (c *cassandra) oldestOffset(hash, topic string) (uint, error) {
-
 	sess, err := c.session()
 	if err != nil {
 		return 0, err
@@ -127,11 +96,9 @@ func (c *cassandra) oldestOffset(hash, topic string) (uint, error) {
 	}
 
 	return uint(lastAvailableOffset), nil
-
 }
 
-func (c *cassandra) latestOffset(hash, topic string) (uint, error) {
-
+func (c *cassandra) GetLatestOffset(hash, topic string) (uint, error) {
 	sess, err := c.session()
 	if err != nil {
 		return 0, err
@@ -145,7 +112,6 @@ func (c *cassandra) latestOffset(hash, topic string) (uint, error) {
 	}
 
 	return uint(lastAvailableOffset), nil
-
 }
 
 func (c *cassandra) session() (*gocql.Session, error) {
@@ -157,21 +123,4 @@ func (c *cassandra) session() (*gocql.Session, error) {
 		c.sess = session
 	}
 	return c.sess, nil
-}
-
-func (c *cassandra) synchronizeOffsetOnStart(hash string, topic string) error {
-
-	c.Lock()
-	if !c.synchronized {
-		o, err := c.oldestOffset(hash, topic)
-		if err != nil {
-			c.Unlock()
-			return err
-		}
-		c.offset = o
-		c.synchronized = true
-	}
-	c.Unlock()
-	return nil
-
 }

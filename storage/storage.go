@@ -2,10 +2,10 @@ package storage
 
 //Storage a storage interface keeping queue
 type Storage interface {
-	//Append appends message to the queue
-	Append(m Message) error
-	Flush(hash string, topic string)
 	Get(q Query) ([]byte, error)
+	Put(m Message) error
+	Flush(hash string, topic string)
+
 	GetOldestOffset(hash, topic string) (uint, error)
 	GetLatestOffset(hash, topic string) (uint, error)
 }
