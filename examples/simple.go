@@ -19,17 +19,20 @@ func main() {
 	dk := getDaakiya()
 
 	go func() {
-		time.Sleep(4 * time.Second)
-		// fmt.Println("writing...")
+		// time.Sleep(4 * time.Second)
+		fmt.Println("writing...")
 		//start an thread that pushes messages
 		//to daakiya every second
 		i := 0
 		for {
-			dk.Append(registry.AppendMessage{
+			err := dk.Append(registry.AppendMessage{
 				Topic: "TEST_TOPIC",
 				Hash:  "CLIENT_1",
 				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
 			})
+			if err != nil {
+				fmt.Println(err)
+			}
 			dk.Append(registry.AppendMessage{
 				Topic: "TEST_TOPIC_2",
 				Hash:  "CLIENT_1",
@@ -67,7 +70,7 @@ func main() {
 func getDaakiya() daakiyaa.Daakiya {
 
 	clusterConfig := gocql.NewCluster("localhost:9042")
-	clusterConfig.Keyspace = "test_keyspace"
+	clusterConfig.Keyspace = "daakiya"
 
 	storage, err := storage.NewCassandraStorage(clusterConfig)
 	if err != nil {

@@ -47,7 +47,7 @@ func (c *cassandra) Put(m Message) error {
 		c.ttl,
 	}
 
-	if err = session.Query(q, args...).Exec(); err != nil {
+	if err = session.Query(q, args...).Consistency(gocql.One).Exec(); err != nil {
 		if err == gocql.ErrNotFound {
 			return &OffsetNotFound{Message: err.Error()}
 		}
