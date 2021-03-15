@@ -2,7 +2,7 @@ package storage
 
 //Storage a storage interface keeping queue
 type Storage interface {
-	Get(q Query) ([]byte, error)
+	Get(q Query) (*Message, error)
 	Put(m Message) error
 	Flush(hash string, topic string)
 
@@ -11,10 +11,11 @@ type Storage interface {
 }
 
 type Message struct {
-	Topic  string
-	Hash   string
-	Value  []byte
-	Offset uint
+	Topic     string `json:"topic"`
+	Hash      string `json:"hash"`
+	Value     []byte `json:"value"`
+	Offset    uint   `json:"offset"`
+	Timestamp string `json:"timestamp"`
 }
 
 type Query struct {

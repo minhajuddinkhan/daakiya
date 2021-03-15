@@ -37,7 +37,7 @@ func (r *daakiya) byPositiveOffset(ctx context.Context, query Query) (chan []byt
 					Offset: uint64(offset),
 				}
 
-				val, err := r.store.Get(sq)
+				message, err := r.store.Get(sq)
 				if err != nil {
 					switch err.(type) {
 					case *storage.ErrHashNotFound:
@@ -54,7 +54,7 @@ func (r *daakiya) byPositiveOffset(ctx context.Context, query Query) (chan []byt
 					}
 				}
 
-				ch <- val
+				ch <- message.Value
 				offset++
 			}
 

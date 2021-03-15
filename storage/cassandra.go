@@ -36,7 +36,7 @@ func (c *cassandra) Put(m Message) error {
 	}
 
 	q := `INSERT INTO messages
-	(hash, topic, offset, data) VALUES (?, ?, ?, ?)
+	(hash, topic, offset, data, timestamp) VALUES (?, ?, ?, ?, ?)
 	 USING TTL ?`
 
 	args := []interface{}{
@@ -44,6 +44,7 @@ func (c *cassandra) Put(m Message) error {
 		m.Topic,
 		m.Offset,
 		m.Value,
+		m.Timestamp,
 		c.ttl,
 	}
 
@@ -57,25 +58,31 @@ func (c *cassandra) Put(m Message) error {
 	return nil
 }
 
-func (c *cassandra) Get(q Query) ([]byte, error) {
+func (c *cassandra) Get(q Query) (*Message, error) {
 
 	session, err := c.session()
 	if err != nil {
 		return nil, err
 	}
 
-	query := `SELECT data FROM messages WHERE hash = ? AND offset = ? AND topic = ?`
+	query := `SELECT hash, topic, offset, data, timestamp FROM messages WHERE hash = ? AND offset = ? AND topic = ?`
 	args := []interface{}{q.Hash, q.Offset, q.Topic}
 
-	var bytes []byte
-	if err := session.Query(query, args...).Scan(&bytes); err != nil {
+	var message Message
+	if err := session.Query(query, args...).Scan(
+		&message.Hash,
+		&message.Topic,
+		&message.Offset,
+		&message.Value,
+		&message.Timestamp,
+	); err != nil {
 
 		if err == gocql.ErrNotFound {
 			return nil, &OffsetNotFound{Message: err.Error()}
 		}
 		return nil, err
 	}
-	return bytes, nil
+	return &message, nil
 }
 
 func (c *cassandra) Flush(hash, topic string) {

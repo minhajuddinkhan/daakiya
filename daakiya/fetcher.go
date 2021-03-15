@@ -56,7 +56,6 @@ func (f *fetcher) Fetch(q Query) (uint, error) {
 		return 0, &storage.OffsetNotFound{Message: fmt.Sprintf("offset not found")}
 	}
 
-	fmt.Println("RETURNING", q.Offset)
 	return uint(q.Offset), nil
 }
 

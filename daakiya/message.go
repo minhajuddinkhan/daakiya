@@ -1,9 +1,12 @@
 package daakiyaa
 
+import "time"
+
 type AppendMessage struct {
-	Topic string
-	Hash  string
-	Value []byte
+	Topic     string
+	Hash      string
+	Value     []byte
+	Timestamp time.Time
 }
 
 func (m *AppendMessage) Validate() error {

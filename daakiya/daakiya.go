@@ -2,7 +2,6 @@ package daakiyaa
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
@@ -21,9 +20,10 @@ type daakiya struct {
 	offsetFetcher Fetcher
 	latestOffsets map[string]uint
 	synchronized  map[string]bool
+	courier       Courier
 }
 
-func NewDaakiya(store storage.Storage) Daakiya {
+func NewDaakiya(store storage.Storage, courier Courier) Daakiya {
 
 	d := &daakiya{
 		store:         store,
@@ -31,6 +31,7 @@ func NewDaakiya(store storage.Storage) Daakiya {
 		offsetFetcher: NewOffsetFetcher(store),
 		latestOffsets: make(map[string]uint),
 		synchronized:  make(map[string]bool),
+		courier:       courier,
 	}
 	d.cond = sync.NewCond(&d.mutex)
 
@@ -40,7 +41,6 @@ func NewDaakiya(store storage.Storage) Daakiya {
 //Append adds message in the store
 func (d *daakiya) Append(message AppendMessage) error {
 
-	t := time.Now()
 	if err := message.Validate(); err != nil {
 		return err
 	}
@@ -54,10 +54,11 @@ func (d *daakiya) Append(message AppendMessage) error {
 	var err error
 
 	err = d.store.Put(storage.Message{
-		Topic:  message.Topic,
-		Hash:   message.Hash,
-		Value:  message.Value,
-		Offset: o,
+		Topic:     message.Topic,
+		Hash:      message.Hash,
+		Value:     message.Value,
+		Offset:    o,
+		Timestamp: message.Timestamp.Format(time.RFC1123),
 	})
 	if err == nil {
 		o++
@@ -67,7 +68,6 @@ func (d *daakiya) Append(message AppendMessage) error {
 	d.cond.Broadcast()
 	d.cond.L.Unlock()
 
-	fmt.Println(fmt.Sprintf("append time: %d ms", time.Now().Sub(t).Milliseconds()))
 	return err
 
 }

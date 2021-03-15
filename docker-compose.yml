@@ -6,3 +6,8 @@ services:
     image: cassandra:3.11.8
     ports: 
       - '9042:9042'
+  
+  redis:
+    image: redis
+    ports: 
+      - '6379:6379'

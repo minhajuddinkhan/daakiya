@@ -18,52 +18,73 @@ func main() {
 	//initializes daakiya backed by cassandra
 	dk := getDaakiya()
 
+	// time.Sleep(4 * time.Second)
+	//start an thread that pushes messages
+	//to daakiya every second
+
 	go func() {
-		// time.Sleep(4 * time.Second)
-		fmt.Println("writing...")
-		//start an thread that pushes messages
-		//to daakiya every second
-		i := 0
 		for {
-			err := dk.Append(registry.AppendMessage{
-				Topic: "TEST_TOPIC",
-				Hash:  "CLIENT_1",
-				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
-			})
-			if err != nil {
-				fmt.Println(err)
-			}
-			dk.Append(registry.AppendMessage{
-				Topic: "TEST_TOPIC_2",
-				Hash:  "CLIENT_1",
-				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
-			})
+
+			ctx, cancelFunc := context.WithCancel(context.Background())
+			defer cancelFunc()
 
 			time.Sleep(1 * time.Second)
-			i++
+			//start reading messages from the provided offset
+			ch, err := dk.FromOffset(ctx, registry.Query{
+				Hash:   "CLIENT_1",
+				Topic:  "TEST_TOPIC",
+				Offset: daakiyaa.OLDEST,
+			})
+			if err != nil {
+				log.Fatal(err)
+			}
+			<-ch
+			time.Sleep(1 * time.Second)
+
 		}
 	}()
 
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
+	i := 0
+	j := 0
 
-	time.Sleep(1 * time.Second)
-	//start reading messages from the provided offset
-	channel, err := dk.FromOffset(ctx, registry.Query{
-		Hash:   "CLIENT_1",
-		Topic:  "TEST_TOPIC",
-		Offset: daakiyaa.LATEST,
-	})
+	tt := time.Now()
+	for j = 0; j < 20; j++ {
+		i = 0
+		t := time.Now()
+		for i < 1000 {
+			err := dk.Append(registry.AppendMessage{
+				Topic:     "TEST_TOPIC",
+				Hash:      "CLIENT_1",
+				Value:     []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
+				Timestamp: time.Now(),
+			})
+			if err != nil {
+				spew.Dump(err)
+				fmt.Println(err)
+			}
 
-	if err != nil {
-		spew.Dump(err)
-		log.Fatal(err)
+			i++
+			// fmt.Println("Message written to Cassandra")
+		}
+		fmt.Println(fmt.Sprintf("wrote %d messages in %f seconds", i, time.Now().Sub(t).Seconds()))
+		time.Sleep(1000 * time.Millisecond)
+
+		// time.Sleep(10 * time.Millisecond)
 	}
 
-	for {
-		msg := <-channel
-		fmt.Println(string(msg)) //Hello my friend {i}
-	}
+	fmt.Println(fmt.Sprintf("done writing %d  messages. finish-time: %v, total time to write: %f", i*j, time.Now(), time.Now().Sub(tt).Seconds()))
+
+	// if err != nil {
+	// 	spew.Dump(err)
+	// 	log.Fatal(err)
+	// }
+
+	// for {
+	// 	msg := <-channel
+	// 	fmt.Println(string(msg)) //Hello my friend {i}
+	// }
+
+	time.Sleep(10 * time.Second)
 
 }
 
@@ -77,6 +98,7 @@ func getDaakiya() daakiyaa.Daakiya {
 		log.Fatal(err)
 	}
 
-	return daakiyaa.NewDaakiya(storage)
+	c := daakiyaa.NewCourier()
+	return daakiyaa.NewDaakiya(storage, c)
 
 }

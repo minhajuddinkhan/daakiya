@@ -15,7 +15,7 @@ func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byt
 		}
 	}
 
-	go func() {
+	go func(c Courier) {
 
 		var offset uint
 
@@ -62,7 +62,7 @@ func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byt
 					Offset: uint64(offset),
 				}
 
-				val, err := r.store.Get(sq)
+				message, err := r.store.Get(sq)
 				if err != nil {
 					switch err.(type) {
 
@@ -71,15 +71,22 @@ func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byt
 						continue
 
 					default:
+
 						closeChannels(ch)
 						return
 					}
 				}
-				ch <- val
+
+				err = c.Deliver(*message)
+				if err != nil {
+					closeChannels(ch)
+					return
+				}
+				// ch <- val
 				offset++
 			}
 		}
-	}()
+	}(r.courier)
 
 	return ch, nil
 
