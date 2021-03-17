@@ -2,16 +2,18 @@ package daakiyaa
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/minhajuddinkhan/daakiya/storage"
 )
 
 //Registry Registry
-type Daakiya interface {
+type DaakiyaWriter interface {
 	Append(m AppendMessage) error
-	FromOffset(context context.Context, q Query) (chan []byte, error)
+	// FromOffset(context context.Context, q Query) (chan []byte, error)
 }
 type daakiya struct {
 	store         storage.Storage
@@ -21,9 +23,10 @@ type daakiya struct {
 	latestOffsets map[string]uint
 	synchronized  map[string]bool
 	courier       Courier
+	id            string
 }
 
-func NewDaakiya(store storage.Storage, courier Courier) Daakiya {
+func NewDaakiyaWriter(store storage.Storage) DaakiyaWriter {
 
 	d := &daakiya{
 		store:         store,
@@ -31,8 +34,10 @@ func NewDaakiya(store storage.Storage, courier Courier) Daakiya {
 		offsetFetcher: NewOffsetFetcher(store),
 		latestOffsets: make(map[string]uint),
 		synchronized:  make(map[string]bool),
-		courier:       courier,
+		id:            uuid.NewString(),
+		// courier:       courier,
 	}
+	fmt.Println(d.id)
 	d.cond = sync.NewCond(&d.mutex)
 
 	return d

@@ -56,6 +56,7 @@ func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byt
 				return
 
 			default:
+
 				sq := storage.Query{
 					Topic:  query.Topic,
 					Hash:   query.Hash,
@@ -71,7 +72,6 @@ func (r *daakiya) byNegativeOffset(ctx context.Context, query Query) (chan []byt
 						continue
 
 					default:
-
 						closeChannels(ch)
 						return
 					}
