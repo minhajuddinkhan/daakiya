@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -36,7 +37,7 @@ func handlePushRequest(writer daakiyaa.DaakiyaWriter) http.HandlerFunc {
 			return
 		}
 
-		writer.Append(daakiyaa.AppendMessage{
+		writer.Write(daakiyaa.AppendMessage{
 			Topic:     topic,
 			Hash:      clientID,
 			Value:     b,
@@ -50,28 +51,29 @@ func main() {
 	//initializes daakiya backed by cassandra
 	flag.Parse()
 	log.SetFlags(0)
-	dk := getDaakiya()
-	http.HandleFunc("/push", handlePushRequest(dk))
-	log.Fatal(http.ListenAndServe(*addr, nil))
-
-}
-
-func getDaakiya() daakiyaa.DaakiyaWriter {
 
 	storage, err := storage.NewETCDStorage([]string{"localhost:2377", "localhost:2378", "localhost:2379"})
 	if err != nil {
 		log.Fatal(err)
 	}
-	return daakiyaa.NewDaakiyaWriter(storage)
 
-	// clusterConfig := gocql.NewCluster("localhost:9042")
-	// clusterConfig.Keyspace = "daakiya"
+	dkw := daakiyaa.NewDaakiyaWriter(storage)
+	dkr := daakiyaa.NewDaakiyaReader(storage)
+	http.HandleFunc("/push", handlePushRequest(dkw))
 
-	// storage, err := storage.NewCassandraStorage(clusterConfig)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	client := "sample-client-id"
+	topic := "sample-test-topic"
 
-	// c := daakiyaa.NewCourier()
+	go func() {
+		for {
+			for m := range dkr.Read(context.Background(), client, topic, 0) {
+				fmt.Println("OUTPUT RETURNED:", m.Hash, string(m.Value), m.Topic, m.Offset)
+			}
+			time.Sleep(time.Second)
+		}
+
+	}()
+
+	log.Fatal(http.ListenAndServe(*addr, nil))
 
 }

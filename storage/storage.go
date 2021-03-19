@@ -1,13 +1,18 @@
 package storage
 
-//Storage a storage interface keeping queue
-type Storage interface {
-	Get(q Query) (*Message, error)
-	Put(m Message) error
-	Flush(hash string, topic string)
+import "context"
 
-	GetOldestOffset(hash, topic string) (uint, error)
-	GetLatestOffset(hash, topic string) (uint, error)
+type Storage interface {
+	StorageWriter
+	StorageReader
+}
+
+type StorageWriter interface {
+	Put(m Message) error
+}
+
+type StorageReader interface {
+	ReadFrom(ctx context.Context, q Query) chan Message
 }
 
 type Message struct {

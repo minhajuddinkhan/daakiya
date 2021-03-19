@@ -28,41 +28,67 @@ func NewETCDStorage(endpoints []string) (Storage, error) {
 	return &etcd{cli: cli}, nil
 }
 
-func (e *etcd) getKey(hash, topic string, offset uint) string {
-	return fmt.Sprintf("%s_%s_%d", hash, topic, offset)
+func (e *etcd) getKey(hash, topic string) string {
+	return fmt.Sprintf("%s_%s", hash, topic)
 }
 
 func (e *etcd) getOffsetKey(hash, topic string) string {
 	return fmt.Sprintf("%s_%s_%s", e.offsetKey, hash, topic)
 }
-func (e *etcd) Get(q Query) (*Message, error) {
 
-	resp, err := e.cli.Get(context.Background(), e.getKey(q.Hash, q.Topic, uint(q.Offset)))
-	if err != nil {
-		return nil, err
-	}
+func (e *etcd) ReadFrom(ctx context.Context, q Query) chan Message {
 
-	if len(resp.Kvs) == 0 {
-		return nil, &OffsetNotFound{Message: "message not found"} //&OffsetNotFound{Message: "message not found"}
-	}
-	var msg map[string]interface{}
+	wCtx, cancelFunc := context.WithCancel(ctx)
 
-	if err := json.Unmarshal(resp.Kvs[0].Value, &msg); err != nil {
-		return nil, err
-	}
+	ch := make(chan Message)
 
-	return &Message{
-		Topic:     q.Topic,
-		Hash:      q.Hash,
-		Value:     []byte(msg["data"].(string)),
-		Offset:    uint(msg["offset"].(float64)),
-		Timestamp: msg["timestamp"].(string),
-	}, nil
+	k := e.getKey(q.Hash, q.Topic)
+
+	watchChannel := e.cli.Watch(wCtx, k, clientv3.WithRev(int64(q.Offset)))
+	go func(wc clientv3.WatchChan) {
+		defer func() {
+			cancelFunc()
+			close(ch)
+		}()
+
+		select {
+		case <-wCtx.Done():
+			return
+		default:
+
+			for watchResponse := range watchChannel {
+
+				if err := watchResponse.Err(); err != nil {
+					return
+				}
+				if watchResponse.Canceled {
+					return
+				}
+
+				for _, event := range watchResponse.Events {
+					select {
+					case <-wCtx.Done():
+						return
+					default:
+						ch <- Message{
+							Topic:  q.Topic,
+							Value:  []byte(event.Kv.Value),
+							Offset: uint(event.Kv.CreateRevision),
+							Hash:   q.Hash,
+						}
+					}
+				}
+			}
+
+		}
+	}(watchChannel)
+
+	return ch
 }
 
 func (e *etcd) Put(m Message) error {
 
-	liese, err := e.cli.Grant(context.Background(), 5)
+	liese, err := e.cli.Grant(context.Background(), 30)
 	if err != nil {
 		return err
 	}
@@ -77,16 +103,11 @@ func (e *etcd) Put(m Message) error {
 		return err
 	}
 
-	resp, err := e.cli.Txn(context.Background()).
-		Then(clientv3.OpPut(e.getKey(m.Hash, m.Topic, m.Offset),
-			string(b),
-			clientv3.WithLease(liese.ID),
-		),
-			clientv3.OpPut(
-				e.getOffsetKey(m.Hash, m.Topic),
-				strconv.Itoa(int(m.Offset)),
-			),
-		).Commit()
+	put := clientv3.OpPut(e.getKey(m.Hash, m.Topic), string(b), clientv3.WithLease(liese.ID))
+	resp, err := e.cli.
+		Txn(context.Background()).
+		Then(put).
+		Commit()
 
 	if err != nil {
 		return err
