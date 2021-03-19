@@ -19,7 +19,12 @@ Daakiya is a message broker that ensures 100% message delivery. It is inspired b
 ```go
 func main() {
 
-	storage, err := storage.NewETCDStorage([]string{"localhost:2377", "localhost:2378", "localhost:2379"})
+	storage, err := storage.NewETCDStorage([]string{
+		"localhost:2377",
+		"localhost:2378",
+		"localhost:2379",
+	}))
+	
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,7 +53,12 @@ func main() {
 
 func main() {
 
-	storage, err := storage.NewETCDStorage([]string{"localhost:2377", "localhost:2378", "localhost:2379"})
+	storage, err := storage.NewETCDStorage([]string{
+		"localhost:2377",
+		"localhost:2378",
+		"localhost:2379",
+	})
+
 	if err != nil {
 		log.Fatal(err)
 	}
