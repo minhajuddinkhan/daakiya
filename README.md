@@ -14,47 +14,63 @@ Daakiya is a message broker that ensures 100% message delivery. It is inspired b
 
 
 
-## Example
+## Example - Dakiya Writer
 
 ```go
 func main() {
 
-	//initializes daakiya backed by cassandra
-	dk := getDaakiya()
-
-	go func() {
-		//start an thread that pushes messages
-		//to daakiya every second
-		i := 0
-		for {
-			dk.Append(registry.AppendMessage{
-				Topic: "TEST_TOPIC",
-				Hash:  "CLIENT_1",
-				Value: []byte(fmt.Sprintf("Hello my friend %d", i)), //Hello my friend {i}
-			})
-			time.Sleep(1 * time.Second)
-			i++
-		}
-	}()
-
-	ctx, cancelFunc := context.WithCancel(context.Background())
-	defer cancelFunc()
-
-	//start reading messages from the provided offset
-	channel, err := dk.FromOffset(ctx, registry.Query{
-		Hash:   "CLIENT_1",
-		Topic:  "TEST_TOPIC",
-		Offset: registry.OLDEST,
-	})
-
+	storage, err := storage.NewETCDStorage([]string{"localhost:2377", "localhost:2378", "localhost:2379"})
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	dkw := daakiyaa.NewDaakiyaWriter(storage)
+
 	for {
-		msg := <-channel
-		fmt.Println(string(msg)) //Hello my friend {i}
+
+		dkw.Write(daakiyaa.AppendMessage{
+			Topic:     "X",
+			Hash:      "1111",
+			Value:     []byte("Hello"),
+			Timestamp: time.Now(),
+		})
+		
+	}
+}
+
+
+```
+
+## Example - Dakiya Reader
+
+```go
+
+
+func main() {
+
+	storage, err := storage.NewETCDStorage([]string{"localhost:2377", "localhost:2378", "localhost:2379"})
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	dkr := daakiyaa.NewDaakiyaReader(storage)
+
+	for {
+
+		for m := range dkr.Read(context.Background(), "1111", "X", 0) {
+			data := map[string]interface{}{}
+			json.Unmarshal(m.Value, &data)
+
+			t, _ := time.Parse(time.RFC1123, data["timestamp"].(string))
+			fmt.Println(time.Now().Sub(t).Seconds())
+			fmt.Println("OUTPUT RETURNED:", m.Hash, data["timestamp"], string(m.Value), m.Topic, m.Offset)
+		}
+
+		time.Sleep(time.Second)
+		fmt.Println("retrying..")
+
 	}
 
 }
+
 ```
