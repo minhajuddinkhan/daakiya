@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/ozonru/etcd/clientv3"
@@ -88,10 +87,6 @@ func (e *etcd) ReadFrom(ctx context.Context, q Query) chan Message {
 
 func (e *etcd) Put(m Message) error {
 
-	liese, err := e.cli.Grant(context.Background(), 30)
-	if err != nil {
-		return err
-	}
 	msg := map[string]interface{}{
 		"data":      string(m.Value),
 		"offset":    m.Offset,
@@ -103,7 +98,7 @@ func (e *etcd) Put(m Message) error {
 		return err
 	}
 
-	put := clientv3.OpPut(e.getKey(m.Hash, m.Topic), string(b), clientv3.WithLease(liese.ID))
+	put := clientv3.OpPut(e.getKey(m.Hash, m.Topic), string(b))
 	resp, err := e.cli.
 		Txn(context.Background()).
 		Then(put).
@@ -118,26 +113,4 @@ func (e *etcd) Put(m Message) error {
 	}
 
 	return fmt.Errorf("something went wrong")
-}
-
-func (e *etcd) Flush(hash string, topic string)                  {}
-func (e *etcd) GetOldestOffset(hash, topic string) (uint, error) { return 0, nil }
-func (e *etcd) GetLatestOffset(hash, topic string) (uint, error) {
-
-	resp, err := e.cli.Get(context.Background(), e.getOffsetKey(hash, topic))
-	if err != nil {
-		return 0, err
-	}
-
-	if len(resp.Kvs) == 0 {
-		return 0, &OffsetNotFound{Message: "offset not found in getting latest"}
-	}
-
-	var offset int
-
-	offset, err = strconv.Atoi(string(resp.Kvs[0].Value))
-	if err != nil {
-		return 0, err
-	}
-	return uint(offset), nil
 }
